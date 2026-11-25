@@ -1,21 +1,17 @@
-# Image de base Node.js légère
-FROM node:18-alpine
-
-# Répertoire de travail de l'application
+# --- Étape 1 : construction de l'application ---
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Copier les fichiers de dépendances, puis les installer
-COPY package.json package-lock.json ./
-RUN npm install
-
-# Copier tout le code de l'application
+COPY package*.json ./
+RUN npm ci
 COPY . .
+RUN npm run build
 
-# Construire l'application (résultat dans /app/dist) et installer le serveur web
-RUN npm run build && npm install -g serve
-
-# Port sur lequel serve écoute
+# --- Étape 2 : image finale, légère et sans le code source ---
+FROM node:22-alpine
+WORKDIR /app
+RUN npm install -g serve@14
+COPY --from=build --chown=node:node /app/dist ./dist
+USER node
 EXPOSE 3000
-
-# Démarrer l'application en servant le dossier dist
-CMD ["serve", "-s", "dist"]
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://localhost:3000 || exit 1
+CMD ["serve", "-s", "dist", "-l", "3000"]
